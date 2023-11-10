@@ -1,0 +1,87 @@
+#include <Wire.h>
+#include <Adafruit_MotorShield.h>
+
+// Create the motor shield object with the default I2C address
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
+
+// Create motor objects
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
+
+// Define encoder pins
+#define LEFT_ENCODER_A 2
+#define LEFT_ENCODER_B 3
+#define RIGHT_ENCODER_A 4
+#define RIGHT_ENCODER_B 5
+
+// Variables for encoder counts
+volatile long leftEncoderCount = 0;
+volatile long rightEncoderCount = 0;
+
+// Define constants for robot characteristics
+const float wheelDiameter = 5.0; // in inches
+const float distanceBetweenWheels = 8.0; // in inches
+
+// Function prototypes
+void leftEncoderISR();
+void rightEncoderISR();
+
+void setup() {
+  Serial.begin(9600);           // set up Serial library at 9600 bps
+  Serial.println("Encoder Distance and Orientation Calculation");
+
+  AFMS.begin();  // create with the default frequency 1.6KHz
+
+  // Attach encoder interrupt handlers
+  attachInterrupt(digitalPinToInterrupt(LEFT_ENCODER_A), leftEncoderISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(RIGHT_ENCODER_A), rightEncoderISR, CHANGE);
+}
+
+void loop() {
+  // Your main loop code here
+
+  // Print encoder counts and calculated distance and orientation
+  Serial.print("Left Encoder Count: ");
+  Serial.print(leftEncoderCount);
+  Serial.print(" | Right Encoder Count: ");
+  Serial.println(rightEncoderCount);
+
+  float distance = calculateDistance();
+  float orientation = calculateOrientation();
+
+  Serial.print("Distance (in inches): ");
+  Serial.print(distance);
+  Serial.print(" | Orientation (in degrees): ");
+  Serial.println(orientation);
+
+  delay(100);
+}
+
+void leftEncoderISR() {
+  if (digitalRead(LEFT_ENCODER_B) == HIGH) {
+    leftEncoderCount++;
+  } else {
+    leftEncoderCount--;
+  }
+}
+
+void rightEncoderISR() {
+  if (digitalRead(RIGHT_ENCODER_B) == HIGH) {
+    rightEncoderCount++;
+  } else {
+    rightEncoderCount--;
+  }
+}
+
+float calculateDistance() {
+  // Calculate distance based on encoder counts and wheel diameter
+  float distance = (leftEncoderCount + rightEncoderCount) / 2.0 * (PI * wheelDiameter / 360.0);
+  return distance;
+}
+
+float calculateOrientation() {
+  // Calculate orientation based on encoder counts, wheel diameter, and distance between wheels
+  float orientation = ((rightEncoderCount - leftEncoderCount) / distanceBetweenWheels) * (180.0 / PI);
+  return orientation;
+}
+              
