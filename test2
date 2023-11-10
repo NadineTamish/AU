@@ -1,0 +1,108 @@
+#include <Wire.h>
+#include <Adafruit_MotorShield.h>
+
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
+Adafruit_DCMotor *leftMotor = AFMS.getMotor(1);
+Adafruit_DCMotor *rightMotor = AFMS.getMotor(2);
+
+#define LEFT_ENCODER_A 2
+#define LEFT_ENCODER_B 3
+#define RIGHT_ENCODER_A 4
+#define RIGHT_ENCODER_B 5
+
+volatile long leftEncoderCount = 0;
+volatile long rightEncoderCount = 0;
+
+const float wheelDiameter = 5.0; // in inches
+const float distanceBetweenWheels = 8.0; // in inches
+
+// Variables for odometry
+float x = 0.0;
+float y = 0.0;
+float theta = 0.0; // in radians
+
+float initialX = 0.0;
+float initialY = 0.0;
+bool hasReturned = false;
+
+void setup() {
+  Serial.begin(9600);
+  Serial.println("Odometry with IR Encoder");
+
+  AFMS.begin();
+
+  attachInterrupt(digitalPinToInterrupt(LEFT_ENCODER_A), leftEncoderISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(RIGHT_ENCODER_A), rightEncoderISR, CHANGE);
+}
+
+void loop() {
+  // Your main loop code here
+
+  // Update odometry
+  updateOdometry();
+
+  // Print odometry information
+  Serial.print("X: ");
+  Serial.print(x);
+  Serial.print(" | Y: ");
+  Serial.print(y);
+  Serial.print(" | Theta: ");
+  Serial.println(theta * 180.0 / PI);
+
+  // Check if the robot has returned to the starting point
+  if (!hasReturned && hasRobotReturned()) {
+    hasReturned = true;
+    float distanceFromInitial = calculateDistance(initialX, initialY, x, y);
+    Serial.print("Robot has returned to the starting point! Distance from initial: ");
+    Serial.println(distanceFromInitial);
+  }
+
+  delay(100);
+}
+
+void leftEncoderISR() {
+  if (digitalRead(LEFT_ENCODER_B) == HIGH) {
+    leftEncoderCount++;
+  } else {
+    leftEncoderCount--;
+  }
+}
+
+void rightEncoderISR() {
+  if (digitalRead(RIGHT_ENCODER_B) == HIGH) {
+    rightEncoderCount++;
+  } else {
+    rightEncoderCount--;
+  }
+}
+
+void updateOdometry() {
+  // Calculate the distance each wheel has traveled
+  float leftDistance = leftEncoderCount * (PI * wheelDiameter / 360.0);
+  float rightDistance = rightEncoderCount * (PI * wheelDiameter / 360.0);
+
+  // Reset encoder counts
+  leftEncoderCount = 0;
+  rightEncoderCount = 0;
+
+  // Calculate the change in orientation (theta)
+  float deltaTheta = (rightDistance - leftDistance) / distanceBetweenWheels;
+
+  // Update the robot's pose
+  x += (leftDistance + rightDistance) / 2.0 * cos(theta + deltaTheta / 2.0);
+  y += (leftDistance + rightDistance) / 2.0 * sin(theta + deltaTheta / 2.0);
+  theta += deltaTheta;
+}
+
+bool hasRobotReturned() {
+  // Calculate the distance from the initial position
+  float distanceFromInitial = calculateDistance(initialX, initialY, x, y);
+
+  // Check if the robot has returned to the starting point
+  return distanceFromInitial < 0.5; // Adjust the threshold as needed
+}
+
+float calculateDistance(float x1, float y1, float x2, float y2) {
+  // Calculate the distance between two points
+  return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
+}
